@@ -1,8 +1,7 @@
 import os
 from fastapi.testclient import TestClient
-from .app.server import app
-
-os.chdir('app')
+from app.server import app
+os.chdir("app")
 client = TestClient(app)
 
 """
@@ -23,7 +22,9 @@ def test_root():
     [TO BE IMPLEMENTED]
     Test the root ("/") endpoint, which just returns a {"Hello": "World"} json response
     """
-    pass
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.json() == {"Hello": "World"}
 
 
 def test_predict_empty():
@@ -31,7 +32,8 @@ def test_predict_empty():
     [TO BE IMPLEMENTED]
     Test the "/predict" endpoint, with an empty request body
     """
-    pass
+    response = client.post("/predict", headers={}, json={})
+    assert response.status_code == 422
 
 
 def test_predict_en_lang():
@@ -39,7 +41,12 @@ def test_predict_en_lang():
     [TO BE IMPLEMENTED]
     Test the "/predict" endpoint, with an input text in English (you can use one of the test cases provided in README.md)
     """
-    pass
+    with TestClient(app) as client:
+        response = client.post("/predict", 
+            headers={}, 
+            json={"source": "Yahoo Entertainment", "url": "http://example.com", "title": "Music Patriarch Marsalis Sr. Dies (AP)", "description": "AP - Ellis L. Marsalis Sr., the patriarch of a family of world famous jazz musicians, including grandson Wynton Marsalis, has died. He was 96."})
+        assert response.status_code == 200
+        assert response.json()["label"] == "Entertainment"
 
 
 def test_predict_es_lang():
@@ -48,7 +55,12 @@ def test_predict_es_lang():
     Test the "/predict" endpoint, with an input text in Spanish. 
     Does the tokenizer and classifier handle this case correctly? Does it return an error?
     """
-    pass
+    with TestClient(app) as client:
+        response = client.post("/predict", 
+            headers={}, 
+            json={"source": "Yahoo Entertainment", "url": "http://example.com", "title": "Ejemplo", "description": "Inigualable enmascarado se presentara en la arena coliseo para defender su titulo"})
+        assert response.status_code == 200
+        assert response.json()["label"] == "Sports" # Pretty good prediction for spanish
 
 
 def test_predict_non_ascii():
@@ -57,4 +69,8 @@ def test_predict_non_ascii():
     Test the "/predict" endpoint, with an input text that has non-ASCII characters. 
     Does the tokenizer and classifier handle this case correctly? Does it return an error?
     """
-    pass
+    with TestClient(app) as client:
+        response = client.post("/predict", 
+            headers={}, 
+            json={"source": "Yahoo Entertainment", "url": "http://example.com", "title": "Smiley Face", "description": "\U0001f600"})
+        assert response.status_code == 200 # Works although the result doesn't seem to be great
