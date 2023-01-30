@@ -42,6 +42,12 @@ class NewsCategoryClassifier:
         ], verbose=self.verbose)
         return pipeline
 
+    @property
+    def _pipeline(self):
+        if not self.pipeline:
+            self.pipeline = self._initialize_pipeline()
+        return self.pipeline
+
     def fit(self, X_train: List, y_train: List) -> None:
         logger.info("Beginning model training ...")
         if not self.pipeline:
@@ -72,7 +78,10 @@ class NewsCategoryClassifier:
             ...
         }
         """
-        return {}
+        return dict(zip(
+            self._pipeline.classes_,
+            self._pipeline.predict_proba([model_input["description"]])[0]
+        ))
 
     def predict_label(self, model_input: dict) -> str:
         """
@@ -83,4 +92,4 @@ class NewsCategoryClassifier:
 
         Output format: predicted label for the model input
         """
-        return ""
+        return self._pipeline.predict([model_input["description"]])[0]

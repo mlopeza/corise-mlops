@@ -3,7 +3,10 @@ from pydantic import BaseModel
 from loguru import logger
 
 from classifier import NewsCategoryClassifier
-
+import time
+import json
+import math
+from datetime import datetime 
 
 class PredictRequest(BaseModel):
     source: str
@@ -19,9 +22,10 @@ class PredictResponse(BaseModel):
 
 MODEL_PATH = "../data/news_classifier.joblib"
 LOGS_OUTPUT_PATH = "../data/logs.out"
+NEWS_CLASSIFIER = None
+FILE_LOGGING = None
 
 app = FastAPI()
-
 
 @app.on_event("startup")
 def startup_event():
@@ -34,6 +38,13 @@ def startup_event():
     Access to the model instance and log file will be needed in /predict endpoint, make sure you
     store them as global variables
     """
+    global NEWS_CLASSIFIER
+    global FILE_LOGGING
+    logger.info("Initializing NewsClassifier")
+    nc = NewsCategoryClassifier()
+    nc.load(MODEL_PATH)
+    NEWS_CLASSIFIER = nc
+    FILE_LOGGING = open(LOGS_OUTPUT_PATH, 'a')
     logger.info("Setup completed")
 
 
@@ -45,10 +56,33 @@ def shutdown_event():
     1. Make sure to flush the log file and close any file pointers to avoid corruption
     2. Any other cleanups
     """
+    if FILE_LOGGING:
+        FILE_LOGGING.flush()
+        FILE_LOGGING.close()
     logger.info("Shutting down application")
 
+def request_logger(func):
+    """
+    File logging logic
+    """
+    def wrapper(request: PredictRequest):
+        request_time = datetime.now().strftime("%Y:%m:%d %H:%M:%S")
+        start = time.time()
+        result = func(request)
+        end = time.time()
+        FILE_LOGGING.write(
+            json.dumps({
+                "timestamp": request_time,
+                "request": request.dict(),
+                "response": result.dict(),
+                "latency": math.trunc((end - start) * 1000)
+            }) + "\n"
+        )
+        return result
+    return wrapper
 
 @app.post("/predict", response_model=PredictResponse)
+@request_logger
 def predict(request: PredictRequest):
     # get model prediction for the input request
     # construct the data to be logged
@@ -65,8 +99,9 @@ def predict(request: PredictRequest):
     }
     3. Construct an instance of `PredictResponse` and return
     """
-    response = PredictResponse(scores={"label1": 0.9, "label2": 0.1}, label="label1")
-    return response
+    proba = NEWS_CLASSIFIER.predict_proba(request.dict())
+    label = NEWS_CLASSIFIER.predict_label(request.dict())
+    return PredictResponse(scores=proba, label=label)
 
 
 @app.get("/")
